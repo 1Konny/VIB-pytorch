@@ -11,7 +11,8 @@ class decoder(nn.Module):
         super(decoder, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(self.K,10),
-            nn.Softmax(),)
+            #nn.Softmax(),)
+        )
 
     def forward(self, input):
         output = self.fc(input)
