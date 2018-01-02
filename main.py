@@ -51,7 +51,7 @@ class VIB(object):
 
         # Binary Cross-Entropy Loss
         self.CE_Loss = nn.CrossEntropyLoss()
-        self.KLDiv_Loss = nn.KLDivLoss()
+        self.KLDiv_Loss = nn.KLDivLoss(size_average=False)
         self.CE_Loss_test = nn.CrossEntropyLoss(size_average=False)
         self.KLDiv_Loss_test = nn.KLDivLoss(size_average=False)
 
@@ -131,9 +131,14 @@ class VIB(object):
                 y_ = self.D(z)
                 prior = Variable(torch.randn(z.size())).cuda()
 
+                z_lsm = F.log_softmax(z)
+                prior_sm = F.softmax(prior)
+
                 ''' KLD? IZY? IZX? '''
                 class_loss = self.CE_Loss(y_,labels).div(math.log(2))
-                info_loss = self.KLDiv_Loss(z,prior).div(math.log(2))
+                #info_loss2 = self.KLDiv_Loss(z,prior).div(math.log(2))
+                info_loss = self.KLDiv_Loss(z_lsm,prior_sm).div(math.log(2))
+                #import ipdb; ipdb.set_trace()
                 total_loss = class_loss + self.beta*info_loss
                 IZY = math.log(10,2) - class_loss
                 IZX = info_loss
@@ -148,7 +153,9 @@ class VIB(object):
                 Info_Losses.append(info_loss.data)
                 Class_Losses.append(class_loss.data)
                 if batch_idx % 100 == 0 :
-                    print('[{:03d}:{:03d}] class_loss:{:.3f} info_loss:{:.3f} total_loss:{:.3f} accuracy:{:.3f}%'.format(self.global_epoch,batch_idx,class_loss.data[0],info_loss.data[0],total_loss.data[0],acc.data[0]*100))
+                    print('IZY:{:.3f} IZX:{:.3f}'.format(IZY.data[0],IZX.data[0]))
+                    #print('IZY:{:.3f} IZX:{:.3f} {:.3f}'.format(IZY.data[0],IZX.data[0],info_loss2.data[0]))
+                    #print('[{:03d}:{:03d}] class_loss:{:.3f} info_loss:{:.3f} total_loss:{:.3f} accuracy:{:.3f}%'.format(self.global_epoch,batch_idx,class_loss.data[0],info_loss.data[0],total_loss.data[0],acc.data[0]*100))
 
             Accs = torch.cat(Accs).mean()
             Total_Losses = torch.cat(Total_Losses).mean()
@@ -176,9 +183,12 @@ class VIB(object):
             z = self.E(x)
             y_ = self.D(z)
             prior = Variable(torch.randn(z.size())).cuda()
+            z_lsm = F.log_softmax(z)
+            prior_sm = F.softmax(prior)
 
             class_loss += self.CE_Loss_test(y_,labels).div(math.log(2)).data[0]
-            info_loss += self.KLDiv_Loss_test(z,prior).div(math.log(2)).data[0]
+            #info_loss += self.KLDiv_Loss_test(z,prior).div(math.log(2)).data[0]
+            info_loss += self.KLDiv_Loss_test(z_lsm,prior_sm).div(math.log(2)).data[0]
             total_loss += class_loss + self.beta*info_loss
 
             acc = torch.eq(y_.max(1)[1],labels)
