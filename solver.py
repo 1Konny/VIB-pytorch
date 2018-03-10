@@ -10,7 +10,7 @@ from torchvision.datasets import MNIST
 from torchvision import transforms
 from tensorboardX import SummaryWriter
 
-from utils import One_Hot, cuda, Weight_EMA_Update
+from utils import cuda, Weight_EMA_Update
 from datasets.datasets import return_data
 from visdom_utils import VisFunc
 from model import ToyNet
@@ -43,20 +43,15 @@ class Solver(object):
         self.history['class_loss']=0.
         self.history['total_loss']=0.
 
-        self.onehot_module = One_Hot(10)
-
         self.env_name = args.env_name
-        self.vf = VisFunc(enval=self.env_name,port=55558)
 
         # Tensorboard Visualization
         self.global_epoch = 0
         self.global_iter = 0
         self.summary_dir = os.path.join(args.summary_dir,args.env_name)
-        self.output_dir = os.path.join(args.output_dir,args.env_name)
         if not os.path.exists(self.summary_dir) : os.makedirs(self.summary_dir)
-        #if not os.path.exists(self.output_dir) : os.makedirs(self.output_dir)
-        #self.tf = SummaryWriter(log_dir=self.summary_dir)
-        #self.tf.add_text(tag='argument',text_string=str(args),global_step=self.global_epoch)
+        self.tf = SummaryWriter(log_dir=self.summary_dir)
+        self.tf.add_text(tag='argument',text_string=str(args),global_step=self.global_epoch)
 
         # Dataset init
         self.data_loader = return_data(args)
