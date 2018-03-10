@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
+from utils import cuda
 
 class ToyNet(nn.Module):
 
@@ -37,8 +38,7 @@ class ToyNet(nn.Module):
         return (mu, std), Y
 
     def reparametrize(self, mu, std):
-        #eps = cuda(Variable(torch.randn(std.size()))
-        eps = Variable(torch.randn(std.size()))
+        eps = cuda(Variable(torch.randn(std.size())), std.is_cuda)
 
         return mu + eps*std
 

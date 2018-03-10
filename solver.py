@@ -12,7 +12,6 @@ from tensorboardX import SummaryWriter
 
 from utils import cuda, Weight_EMA_Update
 from datasets.datasets import return_data
-from visdom_utils import VisFunc
 from model import ToyNet
 
 class Solver(object):
@@ -37,16 +36,16 @@ class Solver(object):
         self.scheduler = lr_scheduler.ExponentialLR(self.optim,gamma=0.97)
 
         self.history = dict()
-        self.history['top_acc']=0.
-        self.history['epoch']=0
+        self.history['avg_acc']=0.
         self.history['info_loss']=0.
         self.history['class_loss']=0.
         self.history['total_loss']=0.
+        self.history['epoch']=0
+        self.history['iter']=0
 
         self.env_name = args.env_name
 
         # Tensorboard Visualization
-        self.global_epoch = 0
         self.global_iter = 0
         self.summary_dir = os.path.join(args.summary_dir,args.env_name)
         if not os.path.exists(self.summary_dir) : os.makedirs(self.summary_dir)
@@ -64,12 +63,6 @@ class Solver(object):
             self.toynet.eval()
             self.toynet_ema.model.eval()
         else : raise('mode error. It should be either train or eval')
-
-    def scale_image(self, image):
-        return image.mul(2).add(-1)
-
-    def unscale_image(self, image):
-        return image.add(1).mul(0.5)
 
     def train(self):
         self.set_mode('train')
@@ -150,14 +143,15 @@ class Solver(object):
 
     def test(self):
         self.set_mode('eval')
+
         class_loss = 0
         info_loss = 0
         total_loss = 0
-        correct = 0
-        avg_correct = 0
         total_num = 0
         izy_bound = 0
         izx_bound = 0
+        correct = 0
+        avg_correct = 0
         for idx, (images,labels) in enumerate(self.data_loader['test']):
 
             x = Variable(cuda(images, self.cuda))
@@ -184,6 +178,7 @@ class Solver(object):
 
         accuracy = correct/total_num
         avg_accuracy = avg_correct/total_num
+
         izy_bound /= total_num
         izx_bound /= total_num
         class_loss /= total_num
@@ -195,17 +190,16 @@ class Solver(object):
                 .format(self.global_epoch, izy_bound.data[0], izx_bound.data[0]), end=' ')
         print('acc:{:.4f} avg_acc:{:.4f}'
                 .format(accuracy.data[0], avg_accuracy.data[0]), end=' ')
-        print('err:{:.4f} avg_err:{:.4f}'
+        print('err:{:.4f} avg_erra:{:.4f}'
                 .format(1-accuracy.data[0], 1-avg_accuracy.data[0]))
+        print()
 
-#        if self.history['top_acc'] < ACC :
-#            self.history['top_acc'] = ACC
-#            self.history['class_loss'] = class_loss
-#            self.history['info_loss'] = info_loss
-#            self.history['total_loss'] = total_loss
-#            self.history['epoch'] = self.global_epoch
-#
-#        print()
-#        print('[TEST] accuracy:{:.3f}% top_acc:{:.3f}% at {:d}'.format(ACC*100,self.history['top_acc']*100,self.history['epoch']))
-#        print()
+        if self.history['avg_acc'] < avg_accuracy :
+            self.history['avg_acc'] = avg_accuracy
+            self.history['class_loss'] = class_loss
+            self.history['info_loss'] = info_loss
+            self.history['total_loss'] = total_loss
+            self.history['epoch'] = self.global_epoch
+            self.history['iter'] = self.global_iter
+
         self.set_mode('train')
