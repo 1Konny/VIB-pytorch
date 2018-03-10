@@ -91,8 +91,8 @@ class Solver(object):
             for idx, (images,labels) in enumerate(self.data_loader['train']):
                 self.global_iter += 1
 
-                x = cuda(Variable(images), self.cuda)
-                y = cuda(Variable(labels), self.cuda)
+                x = Variable(cuda(images, self.cuda))
+                y = Variable(cuda(labels, self.cuda))
                 (mu, std), logit = self.toynet(x)
 
                 class_loss = F.cross_entropy(logit,y).div(math.log(2))
@@ -114,7 +114,7 @@ class Solver(object):
                     _, avg_soft_logit = self.toynet(x,self.num_avg,softmax=True)
                     avg_prediction = F.softmax(avg_soft_logit,dim=1).max(1)[1]
                     avg_accuracy = torch.eq(avg_prediction,y).float().mean()
-                else : avg_accuracy = Variable(torch.zeros(accuracy.size()))
+                else : avg_accuracy = Variable(cuda(torch.zeros(accuracy.size()), self.cuda))
 
                 IZY.append(izy_bound.data)
                 IZX.append(izx_bound.data)
@@ -165,9 +165,8 @@ class Solver(object):
         izx_bound = 0
         for idx, (images,labels) in enumerate(self.data_loader['test']):
 
-            x = cuda(Variable(images), self.cuda)
-            y = cuda(Variable(labels), self.cuda)
-            #(mu, std), logit = self.toynet(x)
+            x = Variable(cuda(images, self.cuda))
+            y = Variable(cuda(labels, self.cuda))
             (mu, std), logit = self.toynet_ema.model(x)
 
             class_loss += F.cross_entropy(logit,y,size_average=False).div(math.log(2))
@@ -186,7 +185,7 @@ class Solver(object):
                 avg_prediction = F.softmax(avg_soft_logit,dim=1).max(1)[1]
                 avg_correct += torch.eq(avg_prediction,y).float().sum()
             else :
-                avg_correct = Variable(torch.zeros(correct.size()))
+                avg_correct = Variable(cuda(torch.zeros(correct.size()), self.cuda))
 
         accuracy = correct/total_num
         avg_accuracy = avg_correct/total_num
