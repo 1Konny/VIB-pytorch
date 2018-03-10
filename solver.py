@@ -6,10 +6,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
-from torchvision.datasets import MNIST
 from torchvision import transforms
 from tensorboardX import SummaryWriter
-
 from utils import cuda, Weight_EMA_Update
 from datasets.datasets import return_data
 from model import ToyNet
@@ -28,13 +26,16 @@ class Solver(object):
         self.beta = args.beta
         self.num_avg = args.num_avg
 
+        # Network & Optimizer
         self.toynet = cuda(ToyNet(self.K), self.cuda)
+        self.toynet.weight_init()
         self.toynet_ema = Weight_EMA_Update(cuda(ToyNet(self.K), self.cuda),\
                 self.toynet.state_dict(), decay=0.999)
 
         self.optim = optim.Adam(self.toynet.parameters(),lr=self.lr,betas=(0.5,0.999))
         self.scheduler = lr_scheduler.ExponentialLR(self.optim,gamma=0.97)
 
+        # History
         self.history = dict()
         self.history['avg_acc']=0.
         self.history['info_loss']=0.
@@ -43,16 +44,16 @@ class Solver(object):
         self.history['epoch']=0
         self.history['iter']=0
 
+        # Tensorboard
         self.env_name = args.env_name
-
-        # Tensorboard Visualization
         self.global_iter = 0
+        self.global_epoch = 0
         self.summary_dir = os.path.join(args.summary_dir,args.env_name)
         if not os.path.exists(self.summary_dir) : os.makedirs(self.summary_dir)
         self.tf = SummaryWriter(log_dir=self.summary_dir)
         self.tf.add_text(tag='argument',text_string=str(args),global_step=self.global_epoch)
 
-        # Dataset init
+        # Dataset
         self.data_loader = return_data(args)
 
     def set_mode(self,mode='train'):
