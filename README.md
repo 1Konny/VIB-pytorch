@@ -28,3 +28,6 @@ python main.py --beta 1e-3 --num_avg 12
 
 ### References
 1. Deep Variational Information Bottleneck, Alemi et al.
+
+[paper]: http://arxiv.org/abs/1612.00410
+[original code]: https://github.com/alexalemi/vib_demo
