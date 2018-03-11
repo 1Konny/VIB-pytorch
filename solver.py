@@ -1,5 +1,7 @@
 import numpy as np
-import torch, argparse, os, math
+import torch
+import argparse
+import math
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -11,6 +13,7 @@ from tensorboardX import SummaryWriter
 from utils import cuda, Weight_EMA_Update
 from datasets.datasets import return_data
 from model import ToyNet
+from pathlib import Path
 
 class Solver(object):
 
@@ -37,6 +40,11 @@ class Solver(object):
         self.optim = optim.Adam(self.toynet.parameters(),lr=self.lr,betas=(0.5,0.999))
         self.scheduler = lr_scheduler.ExponentialLR(self.optim,gamma=0.97)
 
+        self.ckpt_dir = Path(args.ckpt_dir).joinpath(args.env_name)
+        if not self.ckpt_dir.exists() : self.ckpt_dir.mkdir(parents=True,exist_ok=True)
+        self.load_ckpt = args.load_ckpt
+        if self.load_ckpt != '' : self.load_checkpoint(self.load_ckpt)
+
         # History
         self.history = dict()
         self.history['avg_acc']=0.
@@ -50,8 +58,8 @@ class Solver(object):
         self.tensorboard = args.tensorboard
         if self.tensorboard :
             self.env_name = args.env_name
-            self.summary_dir = os.path.join(args.summary_dir,args.env_name)
-            if not os.path.exists(self.summary_dir) : os.makedirs(self.summary_dir)
+            self.summary_dir = Path(args.summary_dir).joinpath(args.env_name)
+            if not self.summary_dir.exists() : self.summary_dir.mkdir(parents=True,exist_ok=True)
             self.tf = SummaryWriter(log_dir=self.summary_dir)
             self.tf.add_text(tag='argument',text_string=str(args),global_step=self.global_epoch)
 
@@ -198,6 +206,7 @@ class Solver(object):
             self.history['total_loss'] = total_loss.data[0]
             self.history['epoch'] = self.global_epoch
             self.history['iter'] = self.global_iter
+            self.save_checkpoint('best_acc.tar')
 
         if self.tensorboard :
             self.tf.add_scalars(main_tag='performance/accuracy',
@@ -223,3 +232,42 @@ class Solver(object):
                                 global_step=self.global_iter)
 
         self.set_mode('train')
+
+    def save_checkpoint(self, filename='best_acc.tar'):
+        model_states = {
+                'net':self.toynet.state_dict(),
+                'net_ema':self.toynet_ema.model.state_dict(),
+                }
+        optim_states = {
+                'optim':self.optim.state_dict(),
+                }
+        states = {
+                'iter':self.global_iter,
+                'epoch':self.global_epoch,
+                'history':self.history,
+                'args':self.args,
+                'model_states':model_states,
+                'optim_states':optim_states,
+                }
+
+        file_path = self.ckpt_dir.joinpath(filename)
+        torch.save(states,file_path.open('wb+'))
+        print("=> saved checkpoint '{}' (iter {})".format(file_path,self.global_iter))
+
+    def load_checkpoint(self, filename='best_acc.tar'):
+        file_path = self.ckpt_dir.joinpath(filename)
+        if file_path.is_file():
+            print("=> loading checkpoint '{}'".format(file_path))
+            checkpoint = torch.load(file_path.open('rb'))
+            self.global_epoch = checkpoint['epoch']
+            self.global_iter = checkpoint['iter']
+            self.history = checkpoint['history']
+
+            self.toynet.load_state_dict(checkpoint['model_states']['net'])
+            self.toynet_ema.model.load_state_dict(checkpoint['model_states']['net_ema'])
+
+            print("=> loaded checkpoint '{} (iter {})'".format(
+                file_path, self.global_iter))
+
+        else:
+            print("=> no checkpoint found at '{}'".format(file_path))
