@@ -20,7 +20,7 @@ tensorflow(optional)
 ### Usage
 1. train
 ```
-python main.py --mode train --beta 1e-3 --env_name [NAME]
+python main.py --mode train --beta 1e-3 --tensorboard True --env_name [NAME]
 ```
 2. test
 ```
