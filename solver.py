@@ -25,6 +25,8 @@ class Solver(object):
         self.K = args.K
         self.beta = args.beta
         self.num_avg = args.num_avg
+        self.global_iter = 0
+        self.global_epoch = 0
 
         # Network & Optimizer
         self.toynet = cuda(ToyNet(self.K), self.cuda)
@@ -45,13 +47,13 @@ class Solver(object):
         self.history['iter']=0
 
         # Tensorboard
-        self.env_name = args.env_name
-        self.global_iter = 0
-        self.global_epoch = 0
-        self.summary_dir = os.path.join(args.summary_dir,args.env_name)
-        if not os.path.exists(self.summary_dir) : os.makedirs(self.summary_dir)
-        self.tf = SummaryWriter(log_dir=self.summary_dir)
-        self.tf.add_text(tag='argument',text_string=str(args),global_step=self.global_epoch)
+        self.tensorboard = args.tensorboard
+        if self.tensorboard :
+            self.env_name = args.env_name
+            self.summary_dir = os.path.join(args.summary_dir,args.env_name)
+            if not os.path.exists(self.summary_dir) : os.makedirs(self.summary_dir)
+            self.tf = SummaryWriter(log_dir=self.summary_dir)
+            self.tf.add_text(tag='argument',text_string=str(args),global_step=self.global_epoch)
 
         # Dataset
         self.data_loader = return_data(args)
@@ -70,13 +72,6 @@ class Solver(object):
         for e in range(self.epoch) :
             self.global_epoch += 1
 
-            IZY = []
-            IZX = []
-            CLASS_LOSS = []
-            INFO_LOSS = []
-            TOTAL_LOSS = []
-            ACCURACY = []
-            AVG_ACCURACY = []
             for idx, (images,labels) in enumerate(self.data_loader['train']):
                 self.global_iter += 1
 
@@ -105,14 +100,6 @@ class Solver(object):
                     avg_accuracy = torch.eq(avg_prediction,y).float().mean()
                 else : avg_accuracy = Variable(cuda(torch.zeros(accuracy.size()), self.cuda))
 
-                IZY.append(izy_bound.data)
-                IZX.append(izx_bound.data)
-                CLASS_LOSS.append(class_loss.data)
-                INFO_LOSS.append(info_loss.data)
-                TOTAL_LOSS.append(total_loss.data)
-                ACCURACY.append(accuracy.data)
-                AVG_ACCURACY.append(avg_accuracy.data)
-
                 if self.global_iter % 100 == 0 :
                     print('i:{} IZY:{:.2f} IZX:{:.2f}'
                             .format(idx+1, izy_bound.data[0], izx_bound.data[0]), end=' ')
@@ -121,24 +108,34 @@ class Solver(object):
                     print('err:{:.4f} avg_err:{:.4f}'
                             .format(1-accuracy.data[0], 1-avg_accuracy.data[0]))
 
+                if self.global_iter % 10 == 0 :
+                    if self.tensorboard :
+                        self.tf.add_scalars(main_tag='performance/accuracy',
+                                            tag_scalar_dict={
+                                                'train_one-shot':accuracy.data[0],
+                                                'train_multi-shot':avg_accuracy.data[0]},
+                                            global_step=self.global_iter)
+                        self.tf.add_scalars(main_tag='performance/error',
+                                            tag_scalar_dict={
+                                                'train_one-shot':1-accuracy.data[0],
+                                                'train_multi-shot':1-avg_accuracy.data[0]},
+                                            global_step=self.global_iter)
+                        self.tf.add_scalars(main_tag='performance/cost',
+                                            tag_scalar_dict={
+                                                'train_one-shot_class':class_loss.data[0],
+                                                'train_one-shot_info':info_loss.data[0],
+                                                'train_one-shot_total':total_loss.data[0]},
+                                            global_step=self.global_iter)
+                        self.tf.add_scalars(main_tag='mutual_information/train',
+                                            tag_scalar_dict={
+                                                'I(Z;Y)':izy_bound.data[0],
+                                                'I(Z;X)':izx_bound.data[0]},
+                                            global_step=self.global_iter)
 
-            IZY = torch.cat(IZY).mean()
-            IZX = torch.cat(IZX).mean()
-            CLASS_LOSS = torch.cat(CLASS_LOSS).mean()
-            INFO_LOSS = torch.cat(INFO_LOSS).mean()
-            TOTAL_LOSS = torch.cat(TOTAL_LOSS).mean()
-            ACCURACY = torch.cat(ACCURACY).mean()
-            AVG_ACCURACY = torch.cat(AVG_ACCURACY).mean()
-            print('e:{} IZY:{:.2f} IZX:{:.2f}'
-                    .format(e+1, IZY, IZX), end=' ')
-            print('acc:{:.4f} avg_acc:{:.4f}'
-                    .format(ACCURACY, AVG_ACCURACY), end=' ')
-            print('err:{:.4f} avg_err:{:.4f}'
-                    .format(1-ACCURACY, 1-AVG_ACCURACY))
-            print()
 
             if (self.global_epoch % 2) == 0 : self.scheduler.step()
             self.test()
+
         print(" [*] Training Finished!")
 
     def test(self):
@@ -147,11 +144,11 @@ class Solver(object):
         class_loss = 0
         info_loss = 0
         total_loss = 0
-        total_num = 0
         izy_bound = 0
         izx_bound = 0
         correct = 0
         avg_correct = 0
+        total_num = 0
         for idx, (images,labels) in enumerate(self.data_loader['test']):
 
             x = Variable(cuda(images, self.cuda))
@@ -170,7 +167,7 @@ class Solver(object):
             correct += torch.eq(prediction,y).float().sum()
 
             if self.num_avg != 0 :
-                _, avg_soft_logit = self.toynet(x,self.num_avg)
+                _, avg_soft_logit = self.toynet_ema.model(x,self.num_avg)
                 avg_prediction = avg_soft_logit.max(1)[1]
                 avg_correct += torch.eq(avg_prediction,y).float().sum()
             else :
@@ -201,5 +198,28 @@ class Solver(object):
             self.history['total_loss'] = total_loss.data[0]
             self.history['epoch'] = self.global_epoch
             self.history['iter'] = self.global_iter
+
+        if self.tensorboard :
+            self.tf.add_scalars(main_tag='performance/accuracy',
+                                tag_scalar_dict={
+                                    'test_one-shot':accuracy.data[0],
+                                    'test_multi-shot':avg_accuracy.data[0]},
+                                global_step=self.global_iter)
+            self.tf.add_scalars(main_tag='performance/error',
+                                tag_scalar_dict={
+                                    'test_one-shot':1-accuracy.data[0],
+                                    'test_multi-shot':1-avg_accuracy.data[0]},
+                                global_step=self.global_iter)
+            self.tf.add_scalars(main_tag='performance/cost',
+                                tag_scalar_dict={
+                                    'test_one-shot_class':class_loss.data[0],
+                                    'test_one-shot_info':info_loss.data[0],
+                                    'test_one-shot_total':total_loss.data[0]},
+                                global_step=self.global_iter)
+            self.tf.add_scalars(main_tag='mutual_information/test',
+                                tag_scalar_dict={
+                                    'I(Z;Y)':izy_bound.data[0],
+                                    'I(Z;X)':izx_bound.data[0]},
+                                global_step=self.global_iter)
 
         self.set_mode('train')
