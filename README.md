@@ -18,12 +18,14 @@ tensorflow(optional)
 <br>
 
 ### Usage
+1. train
 ```
-python main.py --beta 1e-3 --num_avg 12
+python main.py --mode train --beta 1e-3 --env_name [NAME]
 ```
-<br>
-
-### Results
+2. test
+```
+python main.py --mode test --env_name [NAME] --load_ckpt best_acc.tar
+```
 <br>
 
 ### References
