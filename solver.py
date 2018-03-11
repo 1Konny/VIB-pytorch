@@ -146,7 +146,7 @@ class Solver(object):
 
         print(" [*] Training Finished!")
 
-    def test(self):
+    def test(self, save_ckpt=True):
         self.set_mode('eval')
 
         class_loss = 0
@@ -206,7 +206,7 @@ class Solver(object):
             self.history['total_loss'] = total_loss.data[0]
             self.history['epoch'] = self.global_epoch
             self.history['iter'] = self.global_iter
-            self.save_checkpoint('best_acc.tar')
+            if save_ckpt : self.save_checkpoint('best_acc.tar')
 
         if self.tensorboard :
             self.tf.add_scalars(main_tag='performance/accuracy',

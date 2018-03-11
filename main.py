@@ -25,7 +25,7 @@ def main(args):
     net = Solver(args)
 
     if args.mode == 'train' : net.train()
-    elif args.mode == 'test' : net.test()
+    elif args.mode == 'test' : net.test(save_ckpt=False)
     else : return 0
 
 if __name__ == "__main__":
