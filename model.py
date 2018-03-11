@@ -5,6 +5,9 @@ import torch.nn.init as init
 from torch.autograd import Variable
 from utils import cuda
 
+import time
+from numbers import Number
+
 class ToyNet(nn.Module):
 
     def __init__(self, K=256):
@@ -29,19 +32,55 @@ class ToyNet(nn.Module):
         std = F.softplus(temp[:,self.K:]-5,beta=1)
 
         Y = 0
+        softmax = True
+        num_sample = 500
+
+
+
+        a = time.time()
+        encoding = self.reparametrize_n(mu,std,num_sample)
+        logit = self.decode(encoding)
+        if softmax : y = F.softmax(logit,dim=2).mean(0)
+        else : y = logit.mean(0)
+        Y=y
+
+        b = time.time()
+        ms = (b-a)*1000
+        print('**{:.3f}'.format(ms))
+
+        a = time.time()
+
         for i in range(num_sample):
-            encoding = self.reparametrize(mu,std)
+            encoding = self.reparametrize_n(mu,std)
             logit = self.decode(encoding)
             if softmax : y = F.softmax(logit,dim=1)
             else : y = logit
             Y += y/num_sample
 
+        b = time.time()
+        ms = (b-a)*1000
+        print('{:.3f}'.format(ms))
+        import ipdb; ipdb.set_trace()
+
+
         return (mu, std), Y
 
-    def reparametrize(self, mu, std):
-        eps = cuda(Variable(torch.randn(std.size())), std.is_cuda)
+    def reparametrize_n(self, mu, std, n=1):
+        # reference :
+        # http://pytorch.org/docs/0.3.1/_modules/torch/distributions.html#Distribution.sample_n
+        def expand(v):
+            if isinstance(v, Number):
+                return torch.Tensor([v]).expand(n, 1)
+            else:
+                return v.expand(n, *v.size())
 
-        return mu + eps*std
+        if n != 1 :
+            mu = expand(mu)
+            std = expand(std)
+
+        eps = Variable(cuda(std.data.new(std.size()).normal_(), std.is_cuda))
+
+        return mu + eps * std
 
     def weight_init(self):
         for m in self._modules:
