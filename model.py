@@ -24,46 +24,20 @@ class ToyNet(nn.Module):
         self.decode = nn.Sequential(
                 nn.Linear(self.K, 10))
 
-    def forward(self, x, num_sample=1, softmax=False):
+    def forward(self, x, num_sample=1):
         if x.dim() > 2 : x = x.view(x.size(0),-1)
-        temp = self.encode(x)
 
-        mu = temp[:,:self.K]
-        std = F.softplus(temp[:,self.K:]-5,beta=1)
+        statistics = self.encode(x)
+        mu = statistics[:,:self.K]
+        std = F.softplus(statistics[:,self.K:]-5,beta=1)
 
-        Y = 0
-        softmax = True
-        num_sample = 500
-
-
-
-        a = time.time()
         encoding = self.reparametrize_n(mu,std,num_sample)
         logit = self.decode(encoding)
-        if softmax : y = F.softmax(logit,dim=2).mean(0)
-        else : y = logit.mean(0)
-        Y=y
 
-        b = time.time()
-        ms = (b-a)*1000
-        print('**{:.3f}'.format(ms))
+        if num_sample == 1 : pass
+        elif num_sample > 1 : logit = F.softmax(logit, dim=2).mean(0)
 
-        a = time.time()
-
-        for i in range(num_sample):
-            encoding = self.reparametrize_n(mu,std)
-            logit = self.decode(encoding)
-            if softmax : y = F.softmax(logit,dim=1)
-            else : y = logit
-            Y += y/num_sample
-
-        b = time.time()
-        ms = (b-a)*1000
-        print('{:.3f}'.format(ms))
-        import ipdb; ipdb.set_trace()
-
-
-        return (mu, std), Y
+        return (mu, std), logit
 
     def reparametrize_n(self, mu, std, n=1):
         # reference :

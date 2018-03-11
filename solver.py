@@ -100,8 +100,8 @@ class Solver(object):
                 accuracy = torch.eq(prediction,y).float().mean()
 
                 if self.num_avg != 0 :
-                    _, avg_soft_logit = self.toynet(x,self.num_avg,softmax=True)
-                    avg_prediction = F.softmax(avg_soft_logit,dim=1).max(1)[1]
+                    _, avg_soft_logit = self.toynet(x,self.num_avg)
+                    avg_prediction = avg_soft_logit.max(1)[1]
                     avg_accuracy = torch.eq(avg_prediction,y).float().mean()
                 else : avg_accuracy = Variable(cuda(torch.zeros(accuracy.size()), self.cuda))
 
@@ -120,7 +120,6 @@ class Solver(object):
                             .format(accuracy.data[0], avg_accuracy.data[0]), end=' ')
                     print('err:{:.4f} avg_err:{:.4f}'
                             .format(1-accuracy.data[0], 1-avg_accuracy.data[0]))
-
 
 
             IZY = torch.cat(IZY).mean()
@@ -171,8 +170,8 @@ class Solver(object):
             correct += torch.eq(prediction,y).float().sum()
 
             if self.num_avg != 0 :
-                _, avg_soft_logit = self.toynet(x,self.num_avg,softmax=True)
-                avg_prediction = F.softmax(avg_soft_logit,dim=1).max(1)[1]
+                _, avg_soft_logit = self.toynet(x,self.num_avg)
+                avg_prediction = avg_soft_logit.max(1)[1]
                 avg_correct += torch.eq(avg_prediction,y).float().sum()
             else :
                 avg_correct = Variable(cuda(torch.zeros(correct.size()), self.cuda))
@@ -195,11 +194,11 @@ class Solver(object):
                 .format(1-accuracy.data[0], 1-avg_accuracy.data[0]))
         print()
 
-        if self.history['avg_acc'] < avg_accuracy :
-            self.history['avg_acc'] = avg_accuracy
-            self.history['class_loss'] = class_loss
-            self.history['info_loss'] = info_loss
-            self.history['total_loss'] = total_loss
+        if self.history['avg_acc'] < avg_accuracy.data[0] :
+            self.history['avg_acc'] = avg_accuracy.data[0]
+            self.history['class_loss'] = class_loss.data[0]
+            self.history['info_loss'] = info_loss.data[0]
+            self.history['total_loss'] = total_loss.data[0]
             self.history['epoch'] = self.global_epoch
             self.history['iter'] = self.global_iter
 
